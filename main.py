@@ -1,6 +1,7 @@
 import streamlit as st
 from supabase import create_client, Client
 from datetime import datetime, timedelta
+from revision_notes import show_revision_notes
 import pandas as pd
 import calendar
 
@@ -561,8 +562,7 @@ elif selection == "Schedule Maker":
     display_calendar()
 
 elif selection == "Revision Notes":
-    st.markdown("### Revision Notes")
-    st.write("Notes management features like Upload, Summarizer, and Flashcards will be here.")
+    show_revision_notes()
 
 elif selection == "Settings":
     st.markdown("### Settings")
