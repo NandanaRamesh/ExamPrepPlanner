@@ -11,6 +11,8 @@ supabase_key = st.secrets["supabase"]["key"]
 # Creating a Supabase client
 supabase: Client = create_client(supabase_url, supabase_key)
 
+user_mail = None
+
 # Set up the page configuration
 st.set_page_config(page_title="Exam Prep Planner", layout="wide")
 
@@ -33,7 +35,6 @@ st.sidebar.markdown("---")
 st.sidebar.markdown("Made with ❤️ for Exam Prep")
 
 
-# Function to handle login
 def login():
     st.markdown("### Login")
     user_email = st.text_input("Enter your email")
@@ -48,16 +49,17 @@ def login():
                     "password": password
                 })
 
-                # Access the user object using dot notation
                 if response.user:
+                    st.session_state["user_name"] = response.user.email  # Store user email in session state
+                    st.session_state["user_logged_in"] = True  # Mark as logged in
+
+                    # Redirect to Home page after successful login
+                    st.session_state["selected_page"] = "Home"  # Set selected page to Home
+                    st.rerun()  # Rerun to refresh the page and show the Home page
+
                     st.success(f"Welcome back, {response.user.email}!")
-                    st.session_state["user_logged_in"] = True
-                    st.session_state["user_name"] = response.user.email
-                    st.session_state["selected_page"] = "Home"  # Navigate to Home page
-                    st.rerun()  # Refresh after login
                 else:
                     st.error("Invalid credentials. Please try again.")
-
             except Exception as e:
                 st.error(f"Login failed: {e}")
         else:
@@ -68,7 +70,6 @@ def login():
         st.session_state["show_signup"] = True
         st.session_state["show_login"] = False
         st.session_state["selected_page"] = "Signup/Login"  # Show signup page
-        st.rerun()
 
 
 # Function to handle signup
@@ -147,80 +148,134 @@ def sign_up():
         st.rerun()
 
 
-# Function to handle logout
 def logout():
     st.session_state["user_logged_in"] = False
     st.session_state["user_name"] = ""
     st.session_state["selected_page"] = "Home"  # Navigate to Home page
     st.session_state["show_signup"] = False
     st.session_state["show_login"] = False
-    st.session_state.clear()  # Clear all session data
     st.rerun()
+
 
 
 # Helper function to add ordinal suffix to week number
 def ordinal(n):
     return "%d%s" % (n, "tsnrhtdd"[((n // 10 % 10 != 1) * (n % 10 < 4) * n % 10)::4])
 
-def add_task(date, task):
-    user = supabase.auth.user()  # Get the logged-in user
-    if user:  # Ensure the user is logged in
-        try:
-            # Insert the task into the Supabase database with UID
-            response = supabase.table("Tasks").insert({
-                "UID": user.id,
-                "date": date.strftime('%Y-%m-%d'),  # Store the date as a string in the format YYYY-MM-DD
-                "task": task,
-                "created_at": datetime.now().isoformat()  # Automatically set the created_at field to the current time
-            }).execute()
+#function to add task
+def add_task(date, task, user_email):
+    try:
+        # Convert the datetime object to a date object
+        task_date = date.date()
 
-            # Check if the insertion was successful by checking the response
-            if response.data:  # If there's data in the response, it means success
-                st.success(f"Task added for {date.strftime('%Y-%m-%d')}")
-            else:
-                st.error(f"Error adding task: {response.error_message}")
-        except Exception as e:
-            st.error(f"Error adding task: {e}")
-    else:
-        st.error("User not logged in. Please log in to add tasks.")
+        # Fetch the last UID from the Tasks table
+        response = supabase.table("Tasks").select("UID").order("UID", desc=True).limit(1).execute()
 
-# Function to show Month View Calendar
+        # Determine the next UID
+        if response.data and len(response.data) > 0:
+            last_uid = response.data[0]["UID"]  # e.g., "UID00001"
+            # Extract the numeric part and increment it
+            last_number = int(last_uid[3:])  # Skip the "UID" prefix
+            next_number = last_number + 1
+        else:
+            next_number = 1  # Start with 1 if no records exist
+
+        # Format the new UID with leading zeros and the "UID" prefix
+        next_uid = f"UID{next_number:05d}"
+
+        # Insert the new task into the table with the generated UID
+        insert_response = supabase.table("Tasks").insert({
+            "UID": next_uid,  # Formatted UID
+            "email": user_email,
+            "date": task_date.strftime('%Y-%m-%d'),
+            "task": task,
+        }).execute()
+
+    except Exception as e:
+        st.error(f"Unexpected error: {e}")
+
 def show_month_calendar(current_date):
+    # Initialize session state keys if not already present
+    if "clicked_month_date" not in st.session_state:
+        # Set the clicked month date to the first day of the current month
+        first_day_of_month = datetime(current_date.year, current_date.month, 1)
+        st.session_state["clicked_month_date"] = first_day_of_month
+        # Fetch tasks for the first day of the month
+        st.session_state["tasks_for_selected_date"] = fetch_tasks_for_day(first_day_of_month, st.session_state["user_name"])
+
+    if "tasks_for_selected_date" not in st.session_state:
+        st.session_state["tasks_for_selected_date"] = None
+
     # Get the month days (weeks)
     month_days = calendar.monthcalendar(current_date.year, current_date.month)
 
     # Display Month and Year at the top
     st.markdown(f"## {current_date.strftime('%B %Y')}")
 
-    # Day names header (Mon, Tue, Wed, ...)
+    # Day names header (Mon, Tue, Wed, ... )
     days_header = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     cols = st.columns(7)
     for i, day_name in enumerate(days_header):
         cols[i].markdown(f"**{day_name}**")
 
     # Add the dates for the month in grid format
-    clicked_date = None
     for week in month_days:
         cols = st.columns(7)
         for i, day in enumerate(week):
-            if day != 0:
+            if day != 0:  # Skip empty days
                 date = datetime(current_date.year, current_date.month, day)
                 date_str = date.strftime('%Y-%m-%d')
 
-                # Create a button for each day and track task status
-                task_button_color = "lightgreen" if date in st.session_state.get("tasks", {}) else "lightblue"
-                button = cols[i].button(f"{day}", key=f"day_button_{date_str}")
-                if button:
-                    clicked_date = date
+                # Fetch task information only once per render for efficiency
+                tasks = fetch_tasks_for_day(date, st.session_state["user_name"])
+                has_task = len(tasks) > 0
 
-    # Show the task input below the calendar for the clicked date
-    if clicked_date:
-        task_input = st.text_input(f"Add task for {clicked_date.strftime('%Y-%m-%d')}")
+                # Set the cell background color
+                cell_style = f"""
+                    background-color: {"#FFFFFF" if has_task else "transparent" }; 
+                    padding: 5px;
+                    border-radius: 5px;
+                """
+
+                # Render the styled cell with the button inside
+                with cols[i]:
+                    st.markdown(
+                        f"<div style='{cell_style} display: flex; justify-content: center; align-items: center;'>",
+                        unsafe_allow_html=True)
+                    if st.button(f"{day}", key=f"btn-{date_str}"):
+                        # Save the selected date and its tasks to session state
+                        st.session_state["clicked_month_date"] = date
+                        st.session_state["tasks_for_selected_date"] = tasks
+                        st.rerun()
+                    st.markdown("</div>", unsafe_allow_html=True)
+
+    # Only show task-related content if a date is selected
+    clicked_date = st.session_state["clicked_month_date"]
+    if clicked_date is not None:
+        tasks = st.session_state["tasks_for_selected_date"]
+
+        # Task section is rendered only if a date is selected
+        st.markdown(f"### Tasks for {clicked_date.strftime('%A, %B %d, %Y')}")
+        if tasks:
+            st.markdown("#### Existing Tasks:")
+            for task in tasks:
+                st.markdown(f"- {task['task']}")
+        else:
+            st.markdown("_No tasks added yet._")
+
+        # Input field for adding tasks
+        st.markdown("#### Add a New Task:")
+        task_input = st.text_input("Enter your task")
         if st.button(f"Add Task for {clicked_date.strftime('%Y-%m-%d')}"):
             if task_input.strip():
-                add_task(clicked_date, task_input.strip())
+                add_task(clicked_date, task_input.strip(), st.session_state["user_name"])
+                st.success(f"Task added for {clicked_date.strftime('%Y-%m-%d')}")
+                st.session_state["task_added"] = clicked_date
+                st.rerun()
+            else:
+                st.error("Please enter a valid task.")
 
-# Function to show Week View Calendar
+
 def show_week_calendar(current_date):
     # Get the start of the current week
     start_of_week = current_date - timedelta(days=current_date.weekday())
@@ -233,16 +288,65 @@ def show_week_calendar(current_date):
     # Display the week number
     st.markdown(f"### {ordinal(week_number)} Week of {current_date.strftime('%B')}")
 
-    # Day names header (Mon, Tue, Wed, ...)
+    # Day names header (Mon, Tue, Wed, ... )
     days_header = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     cols = st.columns(7)
     for i, day_name in enumerate(days_header):
         cols[i].markdown(f"**{day_name}**")
 
-    # Add the dates for the current week
-    cols = st.columns(7)
+    # Initialize session state for clicked week date
+    if "clicked_week_date" not in st.session_state:
+        # Set the clicked date to the first day of the week initially
+        st.session_state["clicked_week_date"] = week_dates[0]
+
+    # Add the dates for the week in grid format
+    clicked_date = st.session_state["clicked_week_date"]
     for i, date in enumerate(week_dates):
-        cols[i].button(f"{date.day}", key=f"week_button_{date.strftime('%Y-%m-%d')}", on_click=add_task, args=(date,))
+        date_str = date.strftime('%Y-%m-%d')
+
+        # Fetch task information for the date
+        tasks = fetch_tasks_for_day(date, st.session_state["user_name"])
+        has_task = len(tasks) > 0
+
+        # Set the cell background color
+        cell_style = f"""
+            background-color: {"#FFFFFF" if has_task else "transparent"};
+            padding: 5px;
+            border-radius: 5px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        """
+
+        # Render the styled cell with the button inside
+        with cols[i]:
+            st.markdown(f"<div style='{cell_style}'>", unsafe_allow_html=True)
+            button = st.button(f"{date.day}", key=f"week_day_button_{date_str}")
+            if button:
+                clicked_date = date
+                st.session_state["clicked_week_date"] = clicked_date
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    # Show the task input below the calendar for the clicked date
+    if clicked_date is not None:
+        st.markdown(f"### Tasks for {clicked_date.strftime('%A, %B %d, %Y')}")
+        task_input = st.text_input("Enter your task")
+
+        if st.button(f"Add Task for {clicked_date.strftime('%Y-%m-%d')}"):
+            if task_input.strip():
+                # Add task for the clicked date
+                add_task(clicked_date, task_input.strip(), st.session_state["user_name"])
+                # Clear clicked date and rerun
+                st.session_state.pop("clicked_week_date", None)
+                st.session_state["task_added"] = clicked_date.strftime('%Y-%m-%d')
+                st.rerun()
+            else:
+                st.error("Please enter a valid task.")
+
+    if "task_added" in st.session_state:
+        st.success(f"Task added for {st.session_state['task_added']}")
+        del st.session_state["task_added"]  # Reset the task_added flag
+
 
 # Function to show Day View Calendar
 def show_day_calendar(current_date):
@@ -254,42 +358,74 @@ def show_day_calendar(current_date):
 
     # Display tasks for the selected day
     st.markdown("#### Tasks:")
-    tasks = fetch_tasks_for_day(current_date)  # Fetch tasks from Supabase for this day
+    tasks = fetch_tasks_for_day(current_date, st.session_state["user_name"])  # Fetch tasks from Supabase for this day
     if tasks:
         for task in tasks:
             st.markdown(f"- {task['task']}")
     else:
         st.markdown("_No tasks added yet._")
 
-    # Input box and button for adding tasks
+    # Input box for entering a task
     st.markdown("#### Add a New Task:")
-    task_input = st.text_input("Enter your task:", key=f"task-input-{current_date}")
-    if st.button(f"Add Task for {current_date.strftime('%Y-%m-%d')}"):
-        if task_input.strip():  # Only add non-empty tasks
-            add_task(current_date, task_input.strip())
-            st.rerun()
+    task_input = st.text_input("Enter your task:")
+
+    # Submit button for adding the task
+    submit_button = st.button(f"Add Task for {current_date.strftime('%Y-%m-%d')}")
+
+    # Check if the submit button is clicked
+    if submit_button:
+        if task_input.strip():  # Only add non-empty task
+            add_task(current_date, task_input.strip(),
+                     st.session_state["user_name"])  # Pass user_email (user_name here)
+            st.success("Task added successfully!")  # Notify the user
 
 
-# Function to fetch tasks for a specific date from Supabase
-def fetch_tasks_for_day(date):
-    response = supabase.table("Tasks").select("*").eq("date", date.strftime('%Y-%m-%d')).execute()
 
-    # If there is valid data in the response, return it
+# Function to fetch tasks for a specific date and user from Supabase
+def fetch_tasks_for_day(date, user_email):
+    """
+    Fetch tasks for a specific date and user email from the Supabase database.
+    """
+    response = supabase.table("Tasks").select("*") \
+        .eq("date", date.strftime('%Y-%m-%d')) \
+        .eq("email", user_email).execute()
+
+    # Return the data if it exists
     if response.data:
         return response.data
     else:
-        st.error("No tasks found for this date.")
-        return []
+        return []  # Return an empty list if no tasks are found
 
-# Function to display the calendar and interact with tasks
+# Function to fetch upcoming tasks for a specific user from Supabase
+def fetch_upcoming_tasks(user_email):
+    """
+    Fetch upcoming tasks for the user email from the Supabase database.
+    """
+    # Get the current date for filtering tasks
+    current_date = datetime.now().strftime('%Y-%m-%d')
+
+    # Fetch tasks that are greater than or equal to the current date
+    response = supabase.table("Tasks").select("*") \
+        .eq("email", user_email) \
+        .gte("date", current_date) \
+        .order("date", desc=False).execute()  # ascending order for upcoming tasks
+
+    # Return the data if it exists
+    if response.data:
+        return response.data
+    else:
+        return []  # Return an empty list if no tasks are found
+
+
+
 def display_calendar():
     st.markdown("### Interactive Calendar")
 
     # Get current date for default view
     current_date = datetime.now()
 
-    # Get view option: Day, Week, Month
-    view_option = st.radio("Choose view", ("Day View", "Week View", "Month View"))
+    # Get view option: Day, Week, Month, All Upcoming Tasks
+    view_option = st.radio("Choose view", ("Day View", "Week View", "Month View", "Upcoming Tasks"))
 
     # Generate the calendar based on the selected view
     if view_option == "Month View":
@@ -298,6 +434,22 @@ def display_calendar():
         show_week_calendar(current_date)
     elif view_option == "Day View":
         show_day_calendar(current_date)
+    elif view_option == "Upcoming Tasks":
+        show_upcoming_tasks(current_date)
+
+# Function to display upcoming tasks
+def show_upcoming_tasks(current_date):
+    st.markdown(f"### Upcoming Tasks from {current_date.strftime('%B %d, %Y')}")
+
+    # Fetch the upcoming tasks for the logged-in user
+    tasks = fetch_upcoming_tasks(st.session_state["user_name"])
+
+    if tasks:
+        for task in tasks:
+            st.markdown(f"- {task['task']} on {task['date']}")
+    else:
+        st.markdown("_No upcoming tasks found._")
+
 
 # Top Section
 if "selected_page" not in st.session_state:
