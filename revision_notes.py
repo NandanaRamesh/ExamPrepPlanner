@@ -259,4 +259,4 @@ def show_revision_notes():
             st.session_state.chat_history.append({"role": "bot", "message": response})
 
             # Clear the input field and refresh UI
-            st.experimental_rerun()
+            # st.experimental_rerun()
