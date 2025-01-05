@@ -451,6 +451,35 @@ def show_upcoming_tasks(current_date):
     else:
         st.markdown("_No upcoming tasks found._")
 
+# Function to generate a study plan
+def generate_study_plan(syllabus, days_left):
+    """Generates a study plan based on the syllabus and available days."""
+    topics = syllabus.split("\n")
+    topics = [topic.strip() for topic in topics if topic.strip()]  # Remove empty lines and extra spaces
+    total_topics = len(topics)
+            
+    if total_topics == 0 or days_left <= 0:
+        return []
+
+    # Calculate topics per day
+    topics_per_day = max(1, total_topics // days_left)
+    study_plan = []
+
+    for day in range(1, days_left + 1):
+        start_idx = (day - 1) * topics_per_day
+        end_idx = start_idx + topics_per_day
+        day_topics = topics[start_idx:end_idx]
+                
+        if not day_topics:
+            break  # Stop if no more topics left
+                
+        study_plan.append({
+            "day": day,
+            "topics": day_topics
+        })
+
+    return study_plan
+
 
 # Top Section
 if "selected_page" not in st.session_state:
@@ -548,8 +577,38 @@ if selection == "Home":
         with col2:
             syllabus_text = st.text_area("Paste Syllabus Here")
 
+        # Option to Select Days Left
+        days_left = st.number_input(
+            "Enter the number of days left until your exams",
+            min_value=1,
+            value=5,
+            step=1
+        )
+
+        if uploaded_file:
+            from PyPDF2 import PdfReader
+            reader = PdfReader(uploaded_file)
+            syllabus_text = ""
+            for page in reader.pages:
+                syllabus_text += page.extract_text()
+
+        # Generate Study Plan Button
         if st.button("Generate Study Plan"):
-            st.success("Study Plan Generated Successfully!")
+            if not syllabus_text.strip():
+                st.error("Please upload a syllabus file or paste the syllabus text.")
+            else:
+                study_plan = generate_study_plan(syllabus_text, days_left)
+
+                if study_plan:
+                    st.success("Study Plan Generated Successfully!")
+                    st.markdown("### Your Study Plan")
+
+                    for plan in study_plan:
+                        st.markdown(f"**Day {plan['day']}**")
+                        for topic in plan['topics']:
+                            st.write(f"- {topic}")
+                else:
+                    st.warning("Could not generate a study plan. Ensure your syllabus has valid topics.")
 
 elif selection == "Signup/Login":
     # Check if the user wants to see the signup page or the login page
