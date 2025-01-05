@@ -8,26 +8,6 @@ GEMINI_API_KEY = "AIzaSyDO4Jy1s_pTxg9y6qEFZNMfnPPYfmJ6A98"
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel("gemini-2.0-flash-exp")
 
-# Sidebar Styling CSS
-sidebar_style = """
-    <style>
-    [data-testid="stSidebar"] {
-        background-color: #2e3b55; /* Custom sidebar background color */
-        color: white; /* Sidebar text color */
-        padding: 20px; /* Padding inside the sidebar */
-        border-right: 2px solid #d4d4d4; /* Optional: Sidebar border */
-    }
-    [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {
-        color: #ffffff; /* Header text color */
-    }
-    .sidebar-col {
-        background-color: #2e3b55; /* Match the sidebar background */
-        color: white; /* Match text color */
-        padding: 20px;
-        border-radius: 10px; /* Optional: Border radius for the sidebar column */
-    }
-    </style>
-"""
 def extract_text_from_pdf(pdf_file):
     """Extracts text from an uploaded PDF file."""
     reader = PdfReader(pdf_file)
@@ -58,6 +38,55 @@ def chat_with_gemini(question, chat_history):
     chat = model.start_chat(history=chat_history)
     response = chat.send_message(question)
     return response.text, chat.history
+
+def adjust_history_for_gemini(history):
+    """Adjusts chat history for Gemini API."""
+    return [{"role": message["role"], "parts": [message["content"]]} for message in history]
+
+# Sidebar chatbot functionality
+def chatbot_with_scroll_and_gemini():
+    st.markdown("## 🤖 Doubt Clearance Chatbot")
+
+    # Initialize chat history in session state
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+
+    # Display chat messages with scroll
+    chat_container = st.container()
+    with chat_container:
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+
+    # Keep the input bar fixed at the bottom
+    user_input = st.chat_input("Ask a question...")
+    if user_input:
+        # Display user message
+        with st.chat_message("user"):
+            st.markdown(user_input)
+
+        # Save user's message to session state
+        st.session_state.messages.append({"role": "user", "content": user_input})
+
+        # Generate a response using Gemini API
+        with st.chat_message("assistant"):
+            message_placeholder = st.empty()
+            full_response = ""
+
+            try:
+                # Start a conversation with Gemini
+                formatted_history = adjust_history_for_gemini(st.session_state.messages)
+                chat = model.start_chat(history=formatted_history)
+                response = chat.send_message(user_input)
+
+                # Update the full response dynamically
+                full_response = response.text
+                message_placeholder.markdown(full_response)
+
+                # Save assistant's response to session state
+                st.session_state.messages.append({"role": "assistant", "content": full_response})
+            except Exception as e:
+                st.error(f"Error in communication with Gemini API: {e}")
 
 # HTML and CSS for flip cards
 flip_card_html = """
@@ -134,129 +163,63 @@ flip_card_html = """
 def show_revision_notes():
     st.title("Revision Notes")
 
-    # Main Layout
-    col_main, col_sidebar = st.columns([3, 1])  # Adjust layout proportions as needed
+    st.write("Welcome to the Revision Notes page!")
+    st.markdown("### Revision Notes")
 
-    # Main Content
-    with col_main:
-          st.markdown("### Revision Notes")
-          st.write("Welcome to the Revision Notes page!")
+    # Section: Upload Notes
+    st.subheader("Upload Notes")
+    uploaded_file = st.file_uploader("Upload your notes here (PDF only)", type=["pdf"])
+    extracted_text = ""
+    if uploaded_file:
+        extracted_text = extract_text_from_pdf(uploaded_file)
+        st.success(f"Uploaded file: {uploaded_file.name}")
+        st.text_area("Extracted Text", extracted_text, height=200)
 
-          # Section: Upload Notes
-          st.subheader("Upload Notes")
-          uploaded_file = st.file_uploader("Upload your notes here (PDF only)", type=["pdf"])
-          extracted_text = ""
-          if uploaded_file:
-              extracted_text = extract_text_from_pdf(uploaded_file)
-              st.success(f"Uploaded file: {uploaded_file.name}")
-              st.text_area("Extracted Text", extracted_text, height=200)
+    # Section: Summarizer
+    st.subheader("Summarizer")
+    summary = ""
+    if extracted_text:
+        if st.button("Summarize Notes"):
+            summary = summarize_text(extracted_text)
 
-          # Section: Summarizer
-          st.subheader("Summarizer")
-          summary = ""
-          if extracted_text:
-              if st.button("Summarize Notes"):
-                  summary = summarize_text(extracted_text)
-          
-          # Section: Flashcards
-          st.subheader("Flashcards")
-          flashcards = ""
-          if extracted_text:
-              if st.button("Generate Flashcards"):
-                  flashcards = generate_flashcards(extracted_text)
+    # Section: Flashcards
+    st.subheader("Flashcards")
+    flashcards = ""
+    if extracted_text:
+        if st.button("Generate Flashcards"):
+            flashcards = generate_flashcards(extracted_text)
 
-          # Display Summary and Flashcards together
-          if summary:
-              st.subheader("Summary")
-              st.text_area("Summary", summary, height=150)
-          
-          if flashcards:
-              st.subheader("Flashcards")
-              # Split the flashcards into individual cards (assuming each card is split by new lines or some separator)
-              flashcard_lines = flashcards.split('\n')
-              for i in range(0, len(flashcard_lines), 2):
-                  # Ensure front and back text are clean
-                  card_front = flashcard_lines[i].strip() if i < len(flashcard_lines) else ""
-                  card_back = flashcard_lines[i+1].strip() if i+1 < len(flashcard_lines) else ""
-                  
-                  # Ensure that both card front and back text are not empty
-                  if card_front and card_back:
-                      # Text after the ** will be displayed as the front text
-                      front_text = card_front.split("**")[-1].strip()
-                      back_text = card_back.split("**")[-1].strip()
-                      
-                      # Generate the flip card HTML for each flashcard
-                      card_html = flip_card_html.format(front_text=front_text, back_text=back_text)
-                      st.markdown(card_html, unsafe_allow_html=True)
-                  else:
-                      st.write("")
+    # Display Summary and Flashcards together
+    if summary:
+        st.subheader("Summary")
+        st.text_area("Summary", summary, height=150)
 
-          # Section: Search
-          st.subheader("Search Notes")
-          search_query = st.text_input("Enter search query")
-          if search_query and extracted_text:
-              search_results = [line for line in extracted_text.split('\n') if search_query.lower() in line.lower()]
-              st.write("Search Results:")
-              for result in search_results:
-                  st.write(f"- {result}")
+    if flashcards:
+        st.subheader("Flashcards")
+        # Split the flashcards into individual cards (assuming each card is split by new lines or some separator)
+        flashcard_lines = flashcards.split('\n')
+        for i in range(0, len(flashcard_lines), 2):
+            # Ensure front and back text are clean
+            card_front = flashcard_lines[i].strip() if i < len(flashcard_lines) else ""
+            card_back = flashcard_lines[i+1].strip() if i+1 < len(flashcard_lines) else ""
 
-          # Section: Ask Doubts
-          st.subheader("Ask Questions")
-          question = st.text_input("Ask a question about your notes")
-          if question and extracted_text:
-              chat_history = [{"role": "user", "parts": extracted_text}]
-              response, chat_history = chat_with_gemini(question, chat_history)
-              st.write("Response:")
-              st.write(response)
+            # Ensure that both card front and back text are not empty
+            if card_front and card_back:
+                # Text after the ** will be displayed as the front text
+                front_text = card_front.split("**")[-1].strip()
+                back_text = card_back.split("**")[-1].strip()
 
-          # Highlight Key Points
-          st.subheader("Important Key Points")
-          if search_query:
-              highlighted_text = highlight_key_points(extracted_text, search_results)
-              st.text_area("Highlighted Text", highlighted_text, height=200)
+                # Generate the flip card HTML for each flashcard
+                card_html = flip_card_html.format(front_text=front_text, back_text=back_text)
+                st.markdown(card_html, unsafe_allow_html=True)
 
-    # Sidebar
-    with col_sidebar:
-        # Sidebar title
-        st.markdown("### 🤖 Doubt Clearance Chatbot")
+    # Section: Search
+    st.subheader("Search Notes")
+    search_query = st.text_input("Enter search query")
+    if search_query and extracted_text:
+        search_results = [line for line in extracted_text.split('\n') if search_query.lower() in line.lower()]
+        st.write("Search Results:")
+        for result in search_results:
+            st.write(f"- {result}")
 
-        # Initialize chat history if not already done
-        if "chat_history" not in st.session_state:
-            st.session_state.chat_history = []
-        for chat in st.session_state.chat_history:
-            if chat["role"] == "user":
-                st.markdown(
-                    f"<div class='chat-message user'>You: {chat['message']}</div>", unsafe_allow_html=True
-                )
-            elif chat["role"] == "bot":
-                st.markdown(
-                    f"<div class='chat-message bot'>Bot: {chat['message']}</div>", unsafe_allow_html=True
-                )
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        # Input field for user question
-        question = st.text_input(
-            "Ask a question or follow up",
-            value="",
-            key="unique_question_input",
-        )
-
-        if question:
-            # Add user's question to chat history
-            st.session_state.chat_history.append({"role": "user", "message": question})
-
-            # Prepare conversation history for the API
-            chat_history_api = [
-                {"role": "user", "parts": chat["message"]}
-                for chat in st.session_state.chat_history
-                if chat["role"] == "user"
-            ]
-
-            # Get a response from Gemini (placeholder function)
-            response, updated_history = chat_with_gemini(question, chat_history_api)
-
-            # Add bot's response to chat history
-            st.session_state.chat_history.append({"role": "bot", "message": response})
-
-            # Clear the input field and refresh UI
-            # st.experimental_rerun()
+    chatbot_with_scroll_and_gemini()
