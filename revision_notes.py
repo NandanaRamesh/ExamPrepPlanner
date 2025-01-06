@@ -17,9 +17,24 @@ def extract_text_from_pdf(pdf_file):
     return text
 
 def summarize_text(text):
-    """Summarizes text using the Gemini API."""
-    response = model.generate_content(f"Summarize the following text:\n{text}")
-    return response.text
+    """
+    Summarizes text in an exam-oriented format using the Gemini API.
+    
+    Parameters:
+    - text (str): The text to summarize.
+    - model: The Gemini API model instance to generate content.
+    
+    Returns:
+    - str: The summarized text in an exam-friendly format.
+    """
+    prompt = (
+        f"Summarize the following text into concise, exam-oriented notes. "
+        f"Focus on definitions, key concepts, and important points, and provide the summary in bullet point format:\n\n{text}"
+    )
+    response = model.generate_content(prompt)
+    summary = response.text
+    return summary
+
 
 def generate_flashcards(text):
     """Generates flashcards using the Gemini API."""
@@ -182,6 +197,11 @@ def show_revision_notes():
         if st.button("Summarize Notes"):
             summary = summarize_text(extracted_text)
 
+    # Display Summary and Flashcards together
+    if summary:
+        st.subheader("Summary")
+        st.markdown(summary)
+
     # Section: Flashcards
     st.subheader("Flashcards")
     flashcards = ""
@@ -189,10 +209,6 @@ def show_revision_notes():
         if st.button("Generate Flashcards"):
             flashcards = generate_flashcards(extracted_text)
 
-    # Display Summary and Flashcards together
-    if summary:
-        st.subheader("Summary")
-        st.text_area("Summary", summary, height=150)
 
     if flashcards:
         st.subheader("Flashcards")
