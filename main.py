@@ -3,6 +3,7 @@ from supabase import create_client, Client
 from datetime import datetime, timedelta
 from revision_notes import show_revision_notes
 import pandas as pd
+import google.generativeai as genai
 import calendar
 
 # Accessing Supabase credentials from secrets
@@ -30,6 +31,11 @@ st.sidebar.title("Exam Prep Planner")
 for menu_item in menu:
     if st.sidebar.button(menu_item):
         st.session_state["selected_page"] = menu_item
+
+# Configure Gemini API
+GEMINI_API_KEY = "AIzaSyDO4Jy1s_pTxg9y6qEFZNMfnPPYfmJ6A98"
+genai.configure(api_key=GEMINI_API_KEY)
+model = genai.GenerativeModel("gemini-2.0-flash-exp")
 
 # Sidebar footer
 st.sidebar.markdown("---")
@@ -453,33 +459,25 @@ def show_upcoming_tasks(current_date):
 
 # Function to generate a study plan
 def generate_study_plan(syllabus, days_left):
-    """Generates a study plan based on the syllabus and available days."""
-    topics = syllabus.split("\n")
-    topics = [topic.strip() for topic in topics if topic.strip()]  # Remove empty lines and extra spaces
-    total_topics = len(topics)
-            
-    if total_topics == 0 or days_left <= 0:
-        return []
-
-    # Calculate topics per day
-    topics_per_day = max(1, total_topics // days_left)
-    study_plan = []
-
-    for day in range(1, days_left + 1):
-        start_idx = (day - 1) * topics_per_day
-        end_idx = start_idx + topics_per_day
-        day_topics = topics[start_idx:end_idx]
-                
-        if not day_topics:
-            break  # Stop if no more topics left
-                
-        study_plan.append({
-            "day": day,
-            "topics": day_topics
-        })
-
+    """
+    Generates a study plan in an exam-oriented format using the Gemini API or a similar model.
+    
+    Parameters:
+    - syllabus (str): The syllabus content to analyze and distribute into a study plan.
+    - days_left (int): Number of days left for the exam.
+    - model: The Gemini API model instance to generate content.
+    
+    Returns:
+    - str: The generated study plan as a string.
+    """
+    prompt = (
+        f"Create a detailed, exam-oriented study plan for the following syllabus, "
+        f"distributed over {days_left} days. Prioritize harder topics first, "
+        f"and provide daily tasks with specific preparation strategies:\n\n{syllabus}"
+    )
+    response = model.generate_content(prompt)
+    study_plan = response.text
     return study_plan
-
 
 # Top Section
 if "selected_page" not in st.session_state:
@@ -592,23 +590,24 @@ if selection == "Home":
             for page in reader.pages:
                 syllabus_text += page.extract_text()
 
-        # Generate Study Plan Button
+       # Generate Study Plan Button
         if st.button("Generate Study Plan"):
             if not syllabus_text.strip():
                 st.error("Please upload a syllabus file or paste the syllabus text.")
             else:
-                study_plan = generate_study_plan(syllabus_text, days_left)
+                try:
+                    # Call the AI-powered study plan generator
+                    study_plan = generate_study_plan(syllabus_text, days_left)
+                    
+                    if study_plan:
+                        st.success("Study Plan Generated Successfully!")
+                        st.markdown("### Your Study Plan")
+                        st.markdown(study_plan)  # Display the AI-generated plan
+                    else:
+                        st.warning("The AI could not generate a valid study plan. Please verify your syllabus content.")
+                except Exception as e:
+                    st.error(f"An error occurred while generating the study plan: {e}")
 
-                if study_plan:
-                    st.success("Study Plan Generated Successfully!")
-                    st.markdown("### Your Study Plan")
-
-                    for plan in study_plan:
-                        st.markdown(f"**Day {plan['day']}**")
-                        for topic in plan['topics']:
-                            st.write(f"- {topic}")
-                else:
-                    st.warning("Could not generate a study plan. Ensure your syllabus has valid topics.")
 
 elif selection == "Signup/Login":
     # Check if the user wants to see the signup page or the login page
