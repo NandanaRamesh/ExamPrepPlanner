@@ -5,7 +5,7 @@ from io import BytesIO
 
 GEMINI_API_KEY = "AIzaSyDO4Jy1s_pTxg9y6qEFZNMfnPPYfmJ6A98"
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel("gemini-2.0-flash-exp")
+model = genai.GenerativeModel("gemini-1.5-flash")
 
 def extract_text_from_pdf(pdf_file):
     """Extracts text from an uploaded PDF file."""
