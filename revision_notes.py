@@ -122,10 +122,7 @@ def save_summary_to_database(email, note_name, summary):
             update_response = supabase.table("Summaries").update({
                 "summary": summary
             }).eq("id", existing_id).execute()
-
-            if update_response.status_code == 200:  # Ensure the update was successful
-                st.success("Summary updated successfully!")
-                st.rerun()  # Rerun the app to display the updated summary
+            st.rerun()  # Rerun the app to display the updated summary
         else:
             # Generate a new ID
             last_entry = supabase.table("Summaries").select("id").order("id", desc=True).limit(1).execute()
@@ -143,10 +140,7 @@ def save_summary_to_database(email, note_name, summary):
                 "note_name": note_name,
                 "summary": summary
             }).execute()
-
-            if insert_response.status_code == 200:  # Ensure the insertion was successful
-                st.success("Summary saved successfully!")
-                st.rerun()  # Rerun the app to display the new summary
+            st.rerun()  # Rerun the app to display the new summary
     except Exception as e:
         st.error(f"An unexpected error occurred while saving the summary: {e}")
 
@@ -368,6 +362,12 @@ def show_revision_notes():
         # Display existing summary or a message if none exists
         if existing_summary:
             st.text_area("Existing Summary", existing_summary, height=150, disabled=True)
+            st.download_button(
+                label="Download Existing Summary as TXT",
+                data=existing_summary,
+                file_name=f"{note_name}_existing_summary.txt",
+                mime="text/plain"
+            )
         else:
             st.write("No previous history of a Summary.")
 
