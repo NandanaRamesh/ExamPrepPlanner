@@ -9,7 +9,7 @@ from supabase import create_client, Client
 # Configure Gemini API
 GEMINI_API_KEY = "AIzaSyDO4Jy1s_pTxg9y6qEFZNMfnPPYfmJ6A98"
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel("gemini-2.0-flash-exp")
+model = genai.GenerativeModel("gemini-1.5-flash")
 
 # Accessing Supabase credentials from secrets
 supabase_url = st.secrets["supabase"]["url"]
@@ -63,18 +63,31 @@ def extract_text_from_pdf(pdf_file):
     return text
 
 def summarize_text(text, note_name):
-    """Generates a new summary using the Gemini API and saves it to the database."""
+    """
+    Summarizes text in an exam-oriented format using the Gemini API.
+    
+    Parameters:
+    - text (str): The text to summarize.
+    - model: The Gemini API model instance to generate content.
+    
+    Returns:
+    - str: The summarized text in an exam-friendly format.
+    """
+    prompt = (
+        f"Summarize the following text into concise, exam-oriented notes. "
+        f"Focus on definitions, key concepts, and important points, and provide the summary in bullet point format:\n\n{text}"
+    )
     email = st.session_state.get("user_name")
 
     # Generate a new summary
-    response = model.generate_content(f"Summarize the following text:\n{text}")
+    response = model.generate_content(prompt)
     summary = response.text
 
     # Save the summary to the database
     save_summary_to_database(email, note_name, summary)
 
     # Display the new summary
-    st.text_area("New Summary", summary, height=150, key="new_summary")
+    # st.markdown("New Summary", summary, height=150, key="new_summary")
 
     # Provide download options for the new summary
     st.download_button(
@@ -361,7 +374,7 @@ def show_revision_notes():
 
         # Display existing summary or a message if none exists
         if existing_summary:
-            st.text_area("Existing Summary", existing_summary, height=150, disabled=True)
+            st.text_area("Existing Summary", existing_summary, height=350, disabled=True)
             st.download_button(
                 label="Download Existing Summary as TXT",
                 data=existing_summary,
