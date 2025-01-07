@@ -343,7 +343,7 @@ def show_revision_notes():
         st.subheader(f"Working on Note: {st.session_state.current_note}")
 
         # Add a "Back" button to return to the notes list
-        if st.button("Back to Notes List", key="back_to_notes_button"):
+        if st.button("< Back to Notes List", key="back_to_notes_button"):
             st.session_state.current_note = None
             st.rerun()
 
