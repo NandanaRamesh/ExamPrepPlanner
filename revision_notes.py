@@ -345,10 +345,55 @@ def show_revision_notes():
         st.subheader("Upload Notes")
         uploaded_file = st.file_uploader("Upload your notes here (PDF only)", type=["pdf"])
         extracted_text = ""
-        if uploaded_file:
-            extracted_text = extract_text_from_pdf(uploaded_file)
-            st.success(f"Uploaded file: {uploaded_file.name}")
-            st.text_area("Extracted Text", extracted_text, height=200)
+        email = st.session_state.get("user_name")
+        note_name = st.session_state.get("current_note")
+
+        # Function to check if a file already exists in the Supabase bucket
+        def fetch_file_from_bucket(email, note_name):
+            """Fetches the file from the Supabase bucket if it exists."""
+            file_path = f"{email}/{note_name}.pdf"  # File path in the bucket
+            try:
+                # Attempt to retrieve the file
+                response = supabase.storage.from_("Files").download(file_path)
+                if response:
+                    return response
+            except Exception as e:
+                st.warning(f"Could not fetch file from bucket '{file_path}': {e}")
+            return None
+
+        # Function to upload a file to the Supabase bucket
+        def upload_file_to_bucket(file, email, note_name):
+            """Uploads the file to the Supabase bucket."""
+            file_path = f"{email}/{note_name}.pdf"
+            try:
+                # Upload file content to the bucket
+                supabase.storage.from_("Files").upload(file_path, file.read())
+                st.success(f"File successfully uploaded as {file_path}")
+            except Exception as e:
+                st.error(f"Error uploading file: {e}")
+
+        # Check for an existing file in the bucket
+        existing_file = fetch_file_from_bucket(email, note_name)
+        if existing_file:
+            # If file exists, process it directly in memory
+            st.info(f"A file already exists for this note: {note_name}.pdf")
+
+            # Use BytesIO to hold the file content in memory
+            file_content = BytesIO(existing_file)
+            extracted_text = extract_text_from_pdf(file_content)
+            st.text_area("Extracted Text from Existing File", extracted_text, height=200)
+        else:
+            # Handle file upload if no existing file is found
+            if uploaded_file:
+                # Display uploaded file details
+                st.success(f"Uploaded file: {uploaded_file.name}")
+
+                # Save the uploaded file to the Supabase bucket
+                upload_file_to_bucket(uploaded_file, email, note_name)
+
+                # Extract text from the uploaded file in memory
+                extracted_text = extract_text_from_pdf(uploaded_file)
+                st.text_area("Extracted Text", extracted_text, height=200)
 
         # Section: Summarizer
         st.subheader("Summarizer")
