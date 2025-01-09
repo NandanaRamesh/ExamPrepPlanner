@@ -419,11 +419,11 @@ def show_revision_notes():
 
         # Display existing summary or a message if none exists
         if existing_summary:
-            st.text_area("Existing Summary", existing_summary, height=350, disabled=True)
+            st.text_area("Summary", existing_summary, height=350, disabled=True)
             st.download_button(
-                label="Download Existing Summary as TXT",
+                label="Download Summary as TXT",
                 data=existing_summary,
-                file_name=f"{note_name}_existing_summary.txt",
+                file_name=f"{note_name}_summary.txt",
                 mime="text/plain"
             )
         else:
