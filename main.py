@@ -667,32 +667,49 @@ if selection == "Home":
                         if "checklist_state" not in st.session_state:
                             st.session_state.checklist_state = {}
 
-                        for main_topic, subtopics in subtopics_by_topic.items():
-                            st.markdown(f"#### {main_topic}")
-                            for subtopic in subtopics:
-                                key = f"{main_topic}_{subtopic}"
-                                
-                                # Initialize the checkbox state if not already set
-                                if key not in st.session_state.checklist_state:
-                                    st.session_state.checklist_state[key] = False
-                                
-                                # Render the checkbox and update the session state
-                                st.session_state.checklist_state[key] = st.checkbox(
-                                    subtopic, key=key, value=st.session_state.checklist_state[key]
-                                )
+                        with st.form("checklist_form"):
+                            for main_topic, subtopics in subtopics_by_topic.items():
+                                st.markdown(f"#### {main_topic}")
+                                for subtopic in subtopics:
+                                    key = f"{main_topic}_{subtopic}"
+                                    
+                                    # Initialize the checkbox state if not already set
+                                    if key not in st.session_state.checklist_state:
+                                        st.session_state.checklist_state[key] = False
+                                    
+                                    # Render the checkbox
+                                    checked = st.checkbox(
+                                        subtopic, key=key, value=st.session_state.checklist_state[key]
+                                    )
+                                    
+                                    # Update session state
+                                    st.session_state.checklist_state[key] = checked
+
+                                    # Display the subtopic with strikethrough if checked
+                                    if checked:
+                                        st.markdown(f"<s>{subtopic}</s>", unsafe_allow_html=True)
+                            
+                            submitted = st.form_submit_button("Submit")
+
+                        # Update checklist state only after submission
+                        if submitted:
+                            st.success("Checklist updated!")
+                            st.write("Checklist State:")
+                            st.write(st.session_state.checklist_state)
+
                     else:
                         st.error("Could not generate topics and subtopics.")
                 except Exception as e:
                     st.error(f"An error occurred: {e}")
 
-            # Step 2: Generate a day-wise study plan
-            try:
-                study_plan = generate_study_plan(syllabus_text, days_left)
-                st.success("Study Plan Generated Successfully!")
-                st.markdown("### Day-Wise Study Plan")
-                st.markdown(study_plan)
-            except Exception as e:
-                st.error(f"Error generating study plan: {e}")
+        # Step 2: Generate a day-wise study plan
+        try:
+            study_plan = generate_study_plan(syllabus_text, days_left)
+            st.success("Study Plan Generated Successfully!")
+            st.markdown("### Day-Wise Study Plan")
+            st.markdown(study_plan)
+        except Exception as e:
+            st.error(f"Error generating study plan: {e}")
 
 elif selection == "Signup/Login":
     # Check if the user wants to see the signup page or the login page
