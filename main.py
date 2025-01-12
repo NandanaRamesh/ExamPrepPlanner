@@ -474,7 +474,7 @@ def generate_study_plan(syllabus, days_left):
     prompt = (
         f"Create a detailed, exam-oriented study plan for the following syllabus, "
         f"distributed over {days_left} days. Prioritize harder topics first, "
-        f"and provide daily tasks with specific preparation strategies:\n\n{syllabus}"
+        f"and provide daily tasks with specific preparation strategies with appealing emojis and in an intresting fashion:\n\n{syllabus}"
     )
     response = model.generate_content(prompt)
     study_plan = response.text
