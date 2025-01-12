@@ -164,12 +164,12 @@ def logout():
     st.rerun()
 
 
-
 # Helper function to add ordinal suffix to week number
 def ordinal(n):
     return "%d%s" % (n, "tsnrhtdd"[((n // 10 % 10 != 1) * (n % 10 < 4) * n % 10)::4])
 
-#function to add task
+
+# function to add task
 def add_task(date, task, user_email):
     try:
         # Convert the datetime object to a date object
@@ -209,7 +209,8 @@ def show_month_calendar(current_date):
         first_day_of_month = datetime(current_date.year, current_date.month, 1)
         st.session_state["clicked_month_date"] = first_day_of_month
         # Fetch tasks for the first day of the month
-        st.session_state["tasks_for_selected_date"] = fetch_tasks_for_day(first_day_of_month, st.session_state["user_name"])
+        st.session_state["tasks_for_selected_date"] = fetch_tasks_for_day(first_day_of_month,
+                                                                          st.session_state["user_name"])
 
     if "tasks_for_selected_date" not in st.session_state:
         st.session_state["tasks_for_selected_date"] = None
@@ -240,7 +241,7 @@ def show_month_calendar(current_date):
 
                 # Set the cell background color
                 cell_style = f"""
-                    background-color: {"#FFFFFF" if has_task else "transparent" }; 
+                    background-color: {"#FFFFFF" if has_task else "transparent"}; 
                     padding: 5px;
                     border-radius: 5px;
                 """
@@ -269,8 +270,14 @@ def show_month_calendar(current_date):
 
             for task in tasks:
                 task_uid = task["UID"]  # Unique identifier for the task
-                # Do not precheck the checkbox by removing value=task_done
-                st.checkbox(f"{task['task']}", key=f"chk-{task_uid}")
+                task_done = task["completion"]  # Current completion status
+
+                # Create a checkbox for each task to mark as done, with the current completion status
+                task_completed = st.checkbox(f"{task['task']}", key=f"chk-{task_uid}")
+
+                # If the checkbox state has changed, update the task's completion status
+                if task_completed != task_done:
+                    update_task_completion(task_uid, task_completed)
 
         else:
             st.markdown("_No tasks added yet._")
@@ -286,6 +293,7 @@ def show_month_calendar(current_date):
                 st.rerun()
             else:
                 st.error("Please enter a valid task.")
+
 
 
 def show_week_calendar(current_date):
@@ -380,6 +388,7 @@ def show_week_calendar(current_date):
         st.success(f"Task added for {st.session_state['task_added']}")
         del st.session_state["task_added"]  # Reset the task_added flag
 
+
 def show_day_calendar(current_date):
     # Get the current day's name
     day_name = calendar.day_name[current_date.weekday()]  # "Monday", "Tuesday", etc.
@@ -429,7 +438,7 @@ def fetch_tasks_for_day(date, user_email):
     """
     Fetch tasks for a specific date and user email from the Supabase database.
     """
-    response = supabase.table("Tasks").select("*") \
+    response = supabase.table("Tasks").select("task", "date", "UID", "completion") \
         .eq("date", date.strftime('%Y-%m-%d')) \
         .eq("email", user_email).execute()
 
@@ -439,25 +448,60 @@ def fetch_tasks_for_day(date, user_email):
     else:
         return []  # Return an empty list if no tasks are found
 
-# Function to fetch upcoming tasks for a specific user from Supabase
-def fetch_upcoming_tasks(user_email):
+
+def show_upcoming_tasks():
     """
-    Fetch upcoming tasks for the user email from the Supabase database, including the completion status.
+    Fetch and display upcoming tasks as checklists with an option to update their completion status.
     """
     # Get the current date for filtering tasks
-    current_date = datetime.now().strftime('%Y-%m-%d')
+    current_date = datetime.now()
+    formatted_date = current_date.strftime('%Y-%m-%d')
 
-    # Fetch tasks that are greater than or equal to the current date and include completion column
-    response = supabase.table("Tasks").select("task", "date", "completion", "UID") \
-        .eq("email", user_email) \
-        .gte("date", current_date) \
-        .order("date", desc=False).execute()  # ascending order for upcoming tasks
+    st.markdown(f"### Upcoming Tasks from {current_date.strftime('%B %d, %Y')}")
 
-    # Return the data if it exists
-    if response.data:
-        return response.data
-    else:
-        return []  # Return an empty list if no tasks are found
+    # Fetch tasks with date >= current_date for the logged-in user
+    try:
+        response = (
+            supabase.table("Tasks")
+            .select("task, date, UID, completion")  # Explicitly specify columns to fetch
+            .eq("email", st.session_state["user_name"])  # Match the user email
+            .gte("date", formatted_date)  # Filter for tasks with date >= current_date
+            .execute()
+        )
+
+        # Use .data to access the fetched data
+        tasks = response.data if response.data else []
+
+        # Display the tasks as checkboxes
+        if tasks:
+            for task in tasks:
+                task_name = task["task"]
+                task_date = task["date"]
+                task_uid = task["UID"]
+                is_completed = task["completion"] == 'true'
+
+                # Display a checkbox for each task
+                new_status = st.checkbox(
+                    f"**{task_name}** on {task_date}", value=is_completed
+                )
+
+                # Update the task completion status if the checkbox state changes
+                if new_status != is_completed:
+                    update_task_completion(task_uid, str(new_status).lower())  # Update in database
+                    st.rerun()  # Refresh the page to reflect changes
+        else:
+            st.markdown("_No tasks found._")
+
+    except Exception as e:
+        st.error(f"Error fetching tasks: {e}")
+
+
+def update_task_completion(task_uid, completion_status):
+    try:
+        response = supabase.table("Tasks").update({"completion": completion_status}).eq("UID",task_uid).execute()
+    except Exception as e:
+        st.error(f"An error occurred while updating the task completion status: {e}")
+
 
 def display_calendar():
     st.markdown("### Interactive Calendar")
@@ -476,37 +520,7 @@ def display_calendar():
     elif view_option == "Day View":
         show_day_calendar(current_date)
     elif view_option == "Upcoming Tasks":
-        show_upcoming_tasks(current_date)
-
-def update_task_completion(task_uid, completion_status):
-    """
-    Updates the 'completion' field of a task in the Supabase database.
-    """
-    try:
-        response = supabase.table("Tasks").update({"completion": completion_status}).eq("UID", task_uid).execute()  # Update completion status for the task with the given UID
-    except Exception as e:
-        st.error(f"An error occurred while updating the task completion status: {e}")
-
-def show_upcoming_tasks(current_date):
-    st.markdown(f"### Upcoming Tasks from {current_date.strftime('%B %d, %Y')}")
-
-    # Fetch the upcoming tasks for the logged-in user
-    tasks = fetch_upcoming_tasks(st.session_state["user_name"])
-
-    if tasks:
-        for task in tasks:
-            task_uid = task["UID"]  # Unique identifier for the task
-            task_done = task["completion"]  # Current completion status
-
-            # Create a checkbox for each task to mark as done, but always start unchecked
-            task_completed = st.checkbox(f"{task['task']} on {task['date']}", value=False)
-
-            # If the checkbox state has changed, update the task's completion status
-            if task_completed != task_done:
-                update_task_completion(task_uid, task_completed)
-    else:
-        st.markdown("_No upcoming tasks found._")
-
+        show_upcoming_tasks()
 
 
 # Function to generate a study plan
@@ -531,11 +545,13 @@ def generate_study_plan(syllabus, days_left):
     study_plan = response.text
     return study_plan
 
+
 # Top Section
 if "selected_page" not in st.session_state:
     st.session_state["selected_page"] = "Home"
 
 selection = st.session_state["selected_page"]
+
 
 # Function to fetch upcoming tasks for a specific user from Supabase
 def fetch_upcoming_tasks(user_email):
@@ -549,7 +565,6 @@ def fetch_upcoming_tasks(user_email):
     return response.data if response.data else []
 
 
-
 # Function to fetch today's tasks for the user
 def fetch_todays_tasks(user_email):
     """Fetch tasks for today's date."""
@@ -560,15 +575,18 @@ def fetch_todays_tasks(user_email):
 
     return response.data if response.data else []
 
+
 # Function to fetch the task completion progress
 def fetch_task_progress(user_email):
     """Fetch task progress (completed vs total)."""
     response = supabase.table("Tasks").select("completion") \
         .eq("email", user_email).execute()
 
-    # Calculate total tasks and completed tasks based on 'completion' being True
+    # Calculate total tasks and completed tasks based on 'completion' being True (as a boolean or string)
     total_tasks = len(response.data)
-    completed_tasks = sum(1 for task in response.data if task['completion'] is True)
+
+    # Adjust the comparison depending on how 'completion' is stored
+    completed_tasks = sum(1 for task in response.data if str(task['completion']).lower() == 'true')  # Handle as string
 
     # Calculate progress percentage (if no tasks exist, return 0%)
     progress_percentage = (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0
@@ -646,6 +664,7 @@ if selection == "Home":
 
         user_email = st.session_state["user_name"]
 
+        # Fetch tasks - This triggers the update each time the page is accessed
         upcoming_tasks = fetch_upcoming_tasks(user_email)
         todays_tasks = fetch_todays_tasks(user_email)
         total_tasks, completed_tasks, progress_percentage = fetch_task_progress(user_email)
@@ -690,12 +709,13 @@ if selection == "Home":
 
         if uploaded_file:
             from PyPDF2 import PdfReader
+
             reader = PdfReader(uploaded_file)
             syllabus_text = ""
             for page in reader.pages:
                 syllabus_text += page.extract_text()
 
-       # Generate Study Plan Button
+        # Generate Study Plan Button
         if st.button("Generate Study Plan"):
             if not syllabus_text.strip():
                 st.error("Please upload a syllabus file or paste the syllabus text.")
@@ -703,7 +723,7 @@ if selection == "Home":
                 try:
                     # Call the AI-powered study plan generator
                     study_plan = generate_study_plan(syllabus_text, days_left)
-                    
+
                     if study_plan:
                         st.success("Study Plan Generated Successfully!")
                         st.markdown("### Your Study Plan")
@@ -712,7 +732,6 @@ if selection == "Home":
                         st.warning("The AI could not generate a valid study plan. Please verify your syllabus content.")
                 except Exception as e:
                     st.error(f"An error occurred while generating the study plan: {e}")
-
 
 elif selection == "Signup/Login":
     # Check if the user wants to see the signup page or the login page
