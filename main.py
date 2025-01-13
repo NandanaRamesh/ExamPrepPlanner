@@ -545,7 +545,57 @@ def generate_study_plan(syllabus, days_left):
     study_plan = response.text
     return study_plan
 
+def settings():
+    # Tabbed layout for different settings
+    tabs = st.tabs(["Manage Themes", "Update Profile", "Configure Notifications"])
+    #  Tab 1: Change Theme
+    with tabs[0]:
+        def set_theme(theme_choice):
+            config_path = ".streamlit/config.toml"
+            theme_config = f"[theme]\nbase = \"{theme_choice}\"\n"
 
+            # Write to config.toml
+            os.makedirs(os.path.dirname(config_path), exist_ok=True)
+            with open(config_path, "w") as config_file:
+                config_file.write(theme_config)
+
+            # Show a message to restart the app
+            st.warning("Theme changed! Please restart the app for the changes to take effect.")
+
+        # Settings UI
+        st.markdown("### Theme Settings")
+        selected_theme = st.radio("Choose a theme:", ["light", "dark"], index=0)
+
+        if st.button("Apply Theme"):
+            set_theme(selected_theme)
+    
+    
+    # Tab 2: Update Profile
+    with tabs[1]:
+        st.subheader("Update Profile")
+        current_name = st.session_state.get("user_name", "User")
+        current_email = st.session_state.get("user_email", "")
+
+        name = st.text_input("Name", value=current_name)
+        email = st.text_input("Email", value=current_email)
+
+        if st.button("Update Profile"):
+            # Update profile logic (placeholder)
+            st.session_state["user_name"] = name
+            st.session_state["user_email"] = email
+            st.success("Profile updated successfully!")
+
+    # Tab 3: Configure Notifications
+    with tabs[2]:
+        st.subheader("Configure Notifications")
+        reminders = st.checkbox("Enable Study Session Reminders", value=st.session_state.get("reminders", False))
+
+        if st.button("Save Notification Preferences"):
+            st.session_state["reminders"] = reminders
+            if reminders:
+                st.success("Study session reminders enabled!")
+            else:
+                st.success("Study session reminders disabled!")
 # Top Section
 if "selected_page" not in st.session_state:
     st.session_state["selected_page"] = "Home"
@@ -749,6 +799,7 @@ elif selection == "Revision Notes":
 elif selection == "Settings":
     st.markdown("### Settings")
     st.write("Options to manage themes, update profile, and configure notifications.")
+    settings()
 
 elif selection == "Logout":
     logout()
