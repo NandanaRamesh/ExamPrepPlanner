@@ -1,5 +1,6 @@
 import streamlit as st
 import re
+import time
 from supabase import create_client, Client
 from datetime import datetime, timedelta
 from revision_notes import show_revision_notes
@@ -295,8 +296,6 @@ def show_month_calendar(current_date):
                 st.rerun()
             else:
                 st.error("Please enter a valid task.")
-
-
 
 def show_week_calendar(current_date):
     # Get the start of the current week
@@ -905,9 +904,26 @@ if selection == "Home":
             study_plan = generate_study_plan(syllabus_text, days_left)
             st.success("Study Plan Generated Successfully!")
             st.markdown("### Day-Wise Study Plan")
-            st.markdown(study_plan)
+            text = study_plan
+            # Create a placeholder to dynamically update the content
+            placeholder = st.empty()
+            typing_speed=0.005
+
+            # Start typing animation
+            displayed_text = ""
+            for char in text:
+                displayed_text += char
+                placeholder.markdown(f"**{displayed_text}**")  # You can style it as needed
+                time.sleep(typing_speed)
+
+            # Ensure the final text is displayed
+            placeholder.markdown(f"**{text}**")
         except Exception as e:
             st.error(f"Error generating study plan: {e}")
+
+            # Create a placeholder to dynamically update the content
+    placeholder = st.empty()
+
 
 elif selection == "Signup/Login":
     # Check if the user wants to see the signup page or the login page
