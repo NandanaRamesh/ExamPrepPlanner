@@ -5,6 +5,7 @@ from revision_notes import show_revision_notes
 import pandas as pd
 import google.generativeai as genai
 import calendar
+import os
 
 # Accessing Supabase credentials from secrets
 supabase_url = st.secrets["supabase"]["url"]
