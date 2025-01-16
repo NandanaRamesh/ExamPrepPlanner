@@ -101,7 +101,7 @@ def sign_up():
                     )
 
                     # Check if the response contains a user
-                    user = response.user  # This is where you get the user info (not response["user"])
+                    user = response.user  
 
                     if user:
                         # Fetch the UID from the user object
@@ -562,7 +562,7 @@ def generate_study_plan(syllabus, days_left):
     prompt = (
         f"Create a detailed, exam-oriented study plan for the following syllabus, "
         f"distributed over {days_left} days. Prioritize harder topics first, "
-        f"and provide daily tasks with specific preparation strategies with appealing emojis and in an intresting fashion:\n\n{syllabus}"
+        f"and provide daily tasks with specific preparation strategies in an interesting way:\n\n{syllabus}"
     )
     response = model.generate_content(prompt)
     study_plan = response.text
@@ -864,11 +864,12 @@ if selection == "Home":
                         if "checklist_state" not in st.session_state:
                             st.session_state.checklist_state = {}
 
+                        # Start a form
                         with st.form("checklist_form"):
                             for main_topic, subtopics in subtopics_by_topic.items():
                                 st.markdown(f"#### {main_topic}")
-                                for subtopic in subtopics:
-                                    key = f"{main_topic}_{subtopic}"
+                                for idx, subtopic in enumerate(subtopics):  # Add index for uniqueness
+                                    key = f"{main_topic}_{subtopic}_{idx}"  # Combine topic, subtopic, and index
                                     
                                     # Initialize the checkbox state if not already set
                                     if key not in st.session_state.checklist_state:
@@ -886,6 +887,7 @@ if selection == "Home":
                                     if checked:
                                         st.markdown(f"<s>{subtopic}</s>", unsafe_allow_html=True)
                             
+                            # Submit button
                             submitted = st.form_submit_button("Submit")
 
                         # Update checklist state only after submission
@@ -893,9 +895,9 @@ if selection == "Home":
                             st.success("Checklist updated!")
                             st.write("Checklist State:")
                             st.write(st.session_state.checklist_state)
-
                     else:
                         st.error("Could not generate topics and subtopics.")
+
                 except Exception as e:
                     st.error(f"An error occurred: {e}")
 
