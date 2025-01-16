@@ -765,9 +765,9 @@ def settings():
             else:
                 st.success("Study session reminders disabled!")
 
-
-
-
+# Initialize the selected_page key if it doesn't exist
+if "selected_page" not in st.session_state:
+    st.session_state["selected_page"] = "Home"  # Set default to Home
 
 selection = st.session_state["selected_page"]
 
