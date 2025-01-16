@@ -3,7 +3,6 @@ import re
 from supabase import create_client, Client
 from datetime import datetime, timedelta
 from revision_notes import show_revision_notes
-import pandas as pd
 import google.generativeai as genai
 import calendar
 import os
@@ -59,7 +58,16 @@ def login():
                 })
 
                 if response.user:
-                    st.session_state["user_name"] = response.user.email  # Store user email in session state
+                    # Set session data with the returned access and refresh tokens
+                    access_token = response.session.access_token
+                    refresh_token = response.session.refresh_token
+
+                    # Set session tokens to maintain the user's login state
+                    supabase.auth.set_session(access_token, refresh_token)
+
+                    # Store user email, UID, and logged-in state in session state
+                    st.session_state["user_name"] = response.user.email  # Store user email
+                    st.session_state["user_uid"] = response.user.id  # Store user UID
                     st.session_state["user_logged_in"] = True  # Mark as logged in
 
                     # Redirect to Home page after successful login
@@ -629,10 +637,37 @@ def extract_topics_and_subtopics(data):
 
     return main_topics, subtopics_by_topic
 
+# Function to fetch the UID from the 'users' table based on email
+def fetch_user_uid(email):
+    try:
+        response = supabase.table("users").select("UID").eq("email", email).execute()
+        if response.data:
+            return response.data[0]["UID"]  # Return the UID of the user
+        else:
+            st.error("User not found in the database.")
+            return None
+    except Exception as e:
+        st.error(f"An error occurred while fetching UID: {e}")
+        return None
+
+# Function to fetch the username from the 'usernames' table based on UID
+def fetch_username(uid):
+    try:
+        response = supabase.table("usernames").select("username").eq("UID", uid).execute()
+        if response.data:
+            return response.data[0]["username"]  # Return the username
+        else:
+            st.error("Username not found for the given UID.")
+            return None
+    except Exception as e:
+        st.error(f"An error occurred while fetching username: {e}")
+        return None
+
 def settings():
     # Tabbed layout for different settings
     tabs = st.tabs(["Manage Themes", "Update Profile", "Configure Notifications"])
-    #  Tab 1: Change Theme
+
+    # Tab 1: Change Theme
     with tabs[0]:
         def set_theme(theme_choice):
             config_path = ".streamlit/config.toml"
@@ -643,31 +678,81 @@ def settings():
             with open(config_path, "w") as config_file:
                 config_file.write(theme_config)
 
-            # Show a message to restart the app
-            st.warning("Theme changed! Please restart the app for the changes to take effect.")
-
-        # Settings UI
+        # Theme Settings UI
         st.markdown("### Theme Settings")
         selected_theme = st.radio("Choose a theme:", ["light", "dark"], index=0)
 
         if st.button("Apply Theme"):
             set_theme(selected_theme)
-    
-    
+            st.rerun()
+
     # Tab 2: Update Profile
     with tabs[1]:
         st.subheader("Update Profile")
-        current_name = st.session_state.get("user_name", "User")
-        current_email = st.session_state.get("user_email", "")
 
-        name = st.text_input("Name", value=current_name)
+        # Get the current email from session state
+        current_email = st.session_state.get("user_name", "")
+
+        # Use Supabase Auth to get the current user and their UID
+        def fetch_user_uid():
+            if "user_uid" in st.session_state:
+                # If the UID is already in session state, return it
+                return st.session_state["user_uid"]
+            try:
+                session = supabase.auth.get_session()  # Correct method to get the session
+                if session and session.user:
+                    # Log the session details for debugging
+                    st.write(f"Session: {session}")  # This will help debug what's inside the session
+                    # Store UID in session state
+                    st.session_state["user_uid"] = session.user.id
+                    return session.user.id  # Return the UID of the current user
+                else:
+                    st.error("User not found in the session.")
+                    return None
+            except Exception as e:
+                st.error(f"An error occurred while fetching UID: {e}")
+                return None
+
+        # Function to fetch username using UID from the 'usernames' table
+        def fetch_username(uid):
+            try:
+                response = supabase.table("usernames").select("username").eq("UID", uid).execute()
+                if response.data:
+                    return response.data[0]["username"]
+                else:
+                    st.error("Username not found for the given UID.")
+                    return None
+            except Exception as e:
+                st.error(f"An error occurred while fetching username: {e}")
+                return None
+
+        # Fetch UID and username
+        user_uid = fetch_user_uid()
+        username = fetch_username(user_uid) if user_uid else ""
+
+
+        # Pre-fill the fields
+        name = st.text_input("Name", value=username or "")  # Fallback to empty if username is None
         email = st.text_input("Email", value=current_email)
 
         if st.button("Update Profile"):
-            # Update profile logic (placeholder)
-            st.session_state["user_name"] = name
-            st.session_state["user_email"] = email
-            st.success("Profile updated successfully!")
+            if name and email:
+                try:
+                    # Update username in the 'usernames' table
+                    if user_uid:
+                        response = supabase.table("usernames").update({"username": name}).eq("UID", user_uid).execute()
+
+                        if response.data:  # Check if data is returned, indicating success
+                            st.success("Profile updated successfully!")
+                            st.session_state["user_name"] = email  # Update email in session state
+                        else:
+                            st.error("Failed to update the profile. No data returned.")
+                    else:
+                        st.error("User UID is missing.")
+                except Exception as e:
+                    st.error(f"An error occurred while updating the profile: {e}")
+            else:
+                st.error("Both name and email are required to update the profile.")
 
     # Tab 3: Configure Notifications
     with tabs[2]:
@@ -680,9 +765,10 @@ def settings():
                 st.success("Study session reminders enabled!")
             else:
                 st.success("Study session reminders disabled!")
-# Top Section
-if "selected_page" not in st.session_state:
-    st.session_state["selected_page"] = "Home"
+
+
+
+
 
 selection = st.session_state["selected_page"]
 
@@ -794,7 +880,33 @@ if selection == "Home":
 
     else:
         # User Signed In
-        st.write(f"Welcome back, **{st.session_state['user_name']}**! Let's crush your exams!")
+        if "user_uid" in st.session_state:
+            user_uid = st.session_state["user_uid"]
+
+
+            # Function to fetch username using UID from the 'usernames' table
+            def fetch_username(uid):
+                try:
+                    response = supabase.table("usernames").select("username").eq("UID", uid).execute()
+                    if response.data:
+                        return response.data[0]["username"]
+                    else:
+                        st.error("Username not found for the given UID.")
+                        return None
+                except Exception as e:
+                    st.error(f"An error occurred while fetching username: {e}")
+                    return None
+
+
+            # Fetch the username
+            username = fetch_username(user_uid)
+
+            if username:
+                st.write(f"Welcome back, **{username}**! Let's crush your exams!")
+            else:
+                st.write(f"Welcome back, **{st.session_state['user_name']}**! Let's crush your exams!")
+        else:
+            st.error("User UID is not found in session state.")
 
         user_email = st.session_state["user_name"]
 
