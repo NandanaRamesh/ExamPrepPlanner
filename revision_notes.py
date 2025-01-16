@@ -53,7 +53,6 @@ def add_note_to_history(email, note_name):
         st.error(f"An unexpected error occurred while adding a note: {e}")
         return None
 
-
 def extract_text_from_pdf(pdf_file):
     """Extracts text from an uploaded PDF file."""
     reader = PdfReader(pdf_file)
@@ -162,13 +161,6 @@ def generate_flashcards(text):
     """Generates flashcards using the Gemini API."""
     response = model.generate_content(f"Create flashcards for the following text, give me only question and answers and nothing else:\n{text}")
     return response.text
-
-def highlight_key_points(text, key_points):
-    """Highlights key points in the original text."""
-    highlighted = text
-    for point in key_points:
-        highlighted = highlighted.replace(point, f"**{point}**")
-    return highlighted
 
 def chat_with_gemini(question, chat_history):
     """Handles chat conversation with Gemini API."""
@@ -468,5 +460,4 @@ def show_revision_notes():
             for result in search_results:
                 st.write(f"- {result}")
 
-        # Include chatbot functionality
         chatbot_with_scroll_and_gemini()
