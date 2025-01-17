@@ -7,7 +7,7 @@ from reportlab.lib.styles import getSampleStyleSheet
 from supabase import create_client, Client
 
 # Configure Gemini API
-GEMINI_API_KEY = "AIzaSyDO4Jy1s_pTxg9y6qEFZNMfnPPYfmJ6A98"
+GEMINI_API_KEY = st.secrets["google"]["key"]
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel("gemini-1.5-flash")
 

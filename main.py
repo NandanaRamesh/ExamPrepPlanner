@@ -8,6 +8,7 @@ import google.generativeai as genai
 import calendar
 import os
 
+
 # Accessing Supabase credentials from secrets
 supabase_url = st.secrets["supabase"]["url"]
 supabase_key = st.secrets["supabase"]["key"]
@@ -35,7 +36,7 @@ for menu_item in menu:
         st.session_state["selected_page"] = menu_item
 
 # Configure Gemini API
-GEMINI_API_KEY = "AIzaSyDO4Jy1s_pTxg9y6qEFZNMfnPPYfmJ6A98"
+GEMINI_API_KEY = st.secrets["google"]["key"]
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel("gemini-2.0-flash-exp")
 
