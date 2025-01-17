@@ -5,15 +5,17 @@ from io import BytesIO
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
 from supabase import create_client, Client
+from dotenv import load_dotenv
+import os
 
 # Configure Gemini API
-GEMINI_API_KEY = st.secrets["google"]["key"]
+GEMINI_API_KEY = os.environ.get("google_key")
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel("gemini-1.5-flash")
 
 # Accessing Supabase credentials from secrets
-supabase_url = st.secrets["supabase"]["url"]
-supabase_key = st.secrets["supabase"]["key"]
+supabase_url = os.environ.get("supabase_url")
+supabase_key = os.environ.get("supabase_key")
 
 # Creating a Supabase client
 supabase: Client = create_client(supabase_url, supabase_key)
