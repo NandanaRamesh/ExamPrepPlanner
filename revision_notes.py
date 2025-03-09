@@ -5,19 +5,16 @@ from io import BytesIO
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
 from supabase import create_client, Client
-from dotenv import load_dotenv
+#from dotenv import load_dotenv
 import os
 
-# Configure Gemini API
 GEMINI_API_KEY = os.environ.get("google_key")
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel("gemini-1.5-flash")
 
-# Accessing Supabase credentials from secrets
 supabase_url = os.environ.get("supabase_url")
 supabase_key = os.environ.get("supabase_key")
 
-# Creating a Supabase client
 supabase: Client = create_client(supabase_url, supabase_key)
 
 def fetch_notes_history(email):
@@ -32,20 +29,15 @@ def fetch_notes_history(email):
 
 def add_note_to_history(email, note_name):
     try:
-        # Fetch the last inserted ID from the table
         last_entry = supabase.table("History").select("id").order("id", desc=True).limit(1).execute()
         last_id = last_entry.data[0]["id"] if last_entry.data else None
 
-        # Generate the new ID
         if last_id:
-            # Extract numeric part and increment it
             numeric_part = int(last_id[1:])  # Skip the first character (e.g., "H")
             new_id = f"H{numeric_part + 1:06d}"  # Zero-padded to 6 digits
         else:
-            # If no ID exists, start with H000001
             new_id = "H000001"
 
-        # Insert the new note into the database
         response = supabase.table("History").insert(
             {"id": new_id, "email": st.session_state["user_name"], "note_name": note_name}
         ).execute()
@@ -64,16 +56,6 @@ def extract_text_from_pdf(pdf_file):
     return text
 
 def summarize_text(text, note_name):
-    """
-    Summarizes text in an exam-oriented format using the Gemini API.
-    
-    Parameters:
-    - text (str): The text to summarize.
-    - model: The Gemini API model instance to generate content.
-    
-    Returns:
-    - str: The summarized text in an exam-friendly format.
-    """
     prompt = (
         f"Summarize the following text into concise, exam-oriented notes. "
         f"Focus on definitions, key concepts, and important points, and provide the summary in bullet point format:\n\n{text}"
@@ -87,10 +69,6 @@ def summarize_text(text, note_name):
     # Save the summary to the database
     save_summary_to_database(email, note_name, summary)
 
-    # Display the new summary
-    # st.markdown("New Summary", summary, height=150, key="new_summary")
-
-    # Provide download options for the new summary
     st.download_button(
         label="Download as TXT",
         data=summary,
@@ -127,16 +105,14 @@ def summarize_text(text, note_name):
 
 def save_summary_to_database(email, note_name, summary):
     try:
-        # Check if a summary already exists for the given note name
         response = supabase.table("Summaries").select("*").eq("email", email).eq("note_name", note_name).execute()
 
         if response.data:
-            # Update the existing summary
             existing_id = response.data[0]["id"]
             update_response = supabase.table("Summaries").update({
                 "summary": summary
             }).eq("id", existing_id).execute()
-            st.rerun()  # Rerun the app to display the updated summary
+            st.rerun()
         else:
             # Generate a new ID
             last_entry = supabase.table("Summaries").select("id").order("id", desc=True).limit(1).execute()
@@ -147,79 +123,64 @@ def save_summary_to_database(email, note_name, summary):
             else:
                 new_id = "SUM000001"
 
-            # Insert the new summary
             insert_response = supabase.table("Summaries").insert({
                 "id": new_id,
                 "email": email,
                 "note_name": note_name,
                 "summary": summary
             }).execute()
-            st.rerun()  # Rerun the app to display the new summary
+            st.rerun()
     except Exception as e:
         st.error(f"An unexpected error occurred while saving the summary: {e}")
 
 
 def generate_flashcards(text):
-    """Generates flashcards using the Gemini API."""
     response = model.generate_content(f"Create flashcards for the following text, give me only question and answers and nothing else:\n{text}")
     return response.text
 
 def chat_with_gemini(question, chat_history):
-    """Handles chat conversation with Gemini API."""
     chat = model.start_chat(history=chat_history)
     response = chat.send_message(question)
     return response.text, chat.history
 
 def adjust_history_for_gemini(history):
-    """Adjusts chat history for Gemini API."""
     return [{"role": message["role"], "parts": [message["content"]]} for message in history]
 
-# Sidebar chatbot functionality
 def chatbot_with_scroll_and_gemini():
     st.markdown("## 🤖 Doubt Clearance Chatbot")
 
-    # Initialize chat history in session state
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
-    # Display chat messages with scroll
     chat_container = st.container()
     with chat_container:
         for message in st.session_state.messages:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
 
-    # Keep the input bar fixed at the bottom
     user_input = st.chat_input("Ask a question...")
     if user_input:
-        # Display user message
         with st.chat_message("user"):
             st.markdown(user_input)
 
-        # Save user's message to session state
         st.session_state.messages.append({"role": "user", "content": user_input})
 
-        # Generate a response using Gemini API
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
             full_response = ""
 
             try:
-                # Start a conversation with Gemini
                 formatted_history = adjust_history_for_gemini(st.session_state.messages)
                 chat = model.start_chat(history=formatted_history)
                 response = chat.send_message(user_input)
 
-                # Update the full response dynamically
                 full_response = response.text
                 message_placeholder.markdown(full_response)
 
-                # Save assistant's response to session state
                 st.session_state.messages.append({"role": "assistant", "content": full_response})
             except Exception as e:
                 st.error(f"Error in communication with Gemini API: {e}")
 
-# HTML and CSS for flip cards
 flip_card_html = """
 <style>
 .flip-card-container {{
