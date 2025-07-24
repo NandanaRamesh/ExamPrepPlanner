@@ -8,7 +8,6 @@ import google.generativeai as genai
 import calendar
 import os
 
-
 # Accessing Supabase credentials from secrets
 supabase_url = os.environ.get("supabase_url")
 supabase_key = os.environ.get("supabase_key")
@@ -535,17 +534,6 @@ def display_calendar():
 
 # Function to generate a study plan
 def generate_study_plan(syllabus, days_left):
-    """
-    Generates a study plan in an exam-oriented format using the Gemini API or a similar model.
-    
-    Parameters:
-    - syllabus (str): The syllabus content to analyze and distribute into a study plan.
-    - days_left (int): Number of days left for the exam.
-    - model: The Gemini API model instance to generate content.
-    
-    Returns:
-    - str: The generated study plan as a string.
-    """
     prompt = (
         f"Create a detailed, exam-oriented study plan for the following syllabus, "
         f"distributed over {days_left} days. Prioritize harder topics first, "
@@ -557,17 +545,6 @@ def generate_study_plan(syllabus, days_left):
 
 # Function to generate a study plan
 def generate_study_plan(syllabus, days_left):
-    """
-    Generates a study plan in an exam-oriented format using the Gemini API or a similar model.
-    
-    Parameters:
-    - syllabus (str): The syllabus content to analyze and distribute into a study plan.
-    - days_left (int): Number of days left for the exam.
-    - model: The Gemini API model instance to generate content.
-    
-    Returns:
-    - str: The generated study plan as a string.
-    """
     prompt = (
         f"Create a detailed, exam-oriented study plan for the following syllabus, "
         f"distributed over {days_left} days. Prioritize harder topics first, "
@@ -578,9 +555,6 @@ def generate_study_plan(syllabus, days_left):
     return study_plan
 
 def topics_checklist(syllabus):
-    """
-    Parses the syllabus and generates topics and subtopics as a dictionary.
-    """
     prompt = (
         f"Analyze the following syllabus and divide it into main topics. For each main topic, "
         f"list relevant subtopics in a structured format like:\n\n"
@@ -602,9 +576,6 @@ def topics_checklist(syllabus):
 
 
 def extract_topics_and_subtopics(data):
-    """
-    Extracts main topics and subtopics from a structured textual format.
-    """
 
     main_topics = []
     subtopics_by_topic = {}
